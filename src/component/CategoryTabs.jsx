@@ -81,7 +81,7 @@ useEffect(() => {
         className="flex overflow-x-auto scroll-smooth whitespace-nowrap scrollbar-hide"
       >
         {menuItems.map((item, index) => (
-         <div className="flex items-center">
+         <div key={item.value || index}  className="flex items-center">
 
   {/* 🔹 TEXT CLICK (FILTER) */}
   <span
@@ -152,7 +152,7 @@ useEffect(() => {
           >
             {item.dropdown.map((sub, i) => (
               <div
-  key={i}
+  key={sub.value || i}
   onClick={() => {
     setActiveFilter(sub.value); // 🔥 IMPORTANT
     setOpenDropdown(null);
