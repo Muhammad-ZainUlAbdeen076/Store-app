@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEffect } from "react";
 import { menuItems } from "../data/menuItems";
-
+import logo from "../assets/logo.png";
 
 
 
@@ -123,7 +123,7 @@ const handleBack = () => {
 
   {/* LOGO */}
   <div className="flex items-center gap-3">
-    <img src="/src/assets/logo.png" className="w-18" />
+    <img src={logo} className="w-18" />
     <h1 className="font-bold text-lg">
       Texas LYNX Baseball & Softball
     </h1>
