@@ -74,7 +74,7 @@ const handleBack = () => {
         </button>
 
         {/* CENTER: LOGO */}
-        <img src="/src/assets/logo.png" alt="logo" className="w-10" />
+        <img src={logo} alt="logo" className="w-10" />
 
         {/* RIGHT */}
         <div className="flex items-center gap-4">
