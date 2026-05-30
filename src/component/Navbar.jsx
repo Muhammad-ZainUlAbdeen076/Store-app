@@ -5,7 +5,6 @@ import { useStore } from "../context/StoreContext";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// Max suggestions shown in the dropdown
 const MAX_SUGGESTIONS = 6;
 
 export default function Navbar() {
@@ -20,24 +19,24 @@ export default function Navbar() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const desktopInputRef = useRef(null);
-  const mobileInputRef = useRef(null);
-  const desktopWrapperRef = useRef(null);
-  const userMenuRef = useRef(null);
+  const desktopInputRef     = useRef(null);
+  const mobileInputRef      = useRef(null);
+  const desktopWrapperRef   = useRef(null);
+  const userMenuRef         = useRef(null);
+  const mobileAvatarRef     = useRef(null);
+  const mobileDropdownRef   = useRef(null); // ← NEW: ref for the mobile dropdown panel
 
   // ─── Suggestions ──────────────────────────────────────────────────────────
   const suggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
-
     const seen = new Set();
     const results = [];
-
     for (const p of products) {
       if (results.length >= MAX_SUGGESTIONS) break;
-      const nameMatch = p.name.toLowerCase().includes(q);
+      const nameMatch  = p.name.toLowerCase().includes(q);
       const brandMatch = p.brand?.toLowerCase().includes(q);
-      const typeMatch = p.type?.toLowerCase().includes(q);
+      const typeMatch  = p.type?.toLowerCase().includes(q);
       if ((nameMatch || brandMatch || typeMatch) && !seen.has(p._id)) {
         seen.add(p._id);
         const brandLabel = p.brand
@@ -70,8 +69,8 @@ export default function Navbar() {
     }
   };
 
-  const handleBack = () => setMenuStack(menuStack.slice(0, -1));
-  const closeMenu = () => { setActive(null); setMenuStack([]); };
+  const handleBack  = () => setMenuStack(menuStack.slice(0, -1));
+  const closeMenu   = () => { setActive(null); setMenuStack([]); };
 
   const handleSuggestionClick = (product) => {
     setSearchQuery(product.name);
@@ -80,23 +79,45 @@ export default function Navbar() {
   };
 
   const handleLogout = async () => {
-    await logout();
     setUserMenuOpen(false);
+    await logout();
     navigate("/");
   };
 
+  const handleNavigateOrders = () => {
+    setUserMenuOpen(false);
+    navigate("/orders");
+  };
+
+  const handleNavigateAdmin = () => {
+    setUserMenuOpen(false);
+    navigate("/admin");
+  };
+
   // ─── Outside click closes dropdowns ───────────────────────────────────────
+  // KEY FIX: we check BOTH the avatar button AND the dropdown panel.
+  // If the touch/click is inside either of them, we do NOT close the menu.
   useEffect(() => {
     const handler = (e) => {
-      if (desktopWrapperRef.current && !desktopWrapperRef.current.contains(e.target)) {
+      const inDesktopWrapper = desktopWrapperRef.current?.contains(e.target);
+      const inDesktopUserMenu = userMenuRef.current?.contains(e.target);
+      const inMobileAvatar = mobileAvatarRef.current?.contains(e.target);
+      const inMobileDropdown = mobileDropdownRef.current?.contains(e.target);
+
+      if (!inDesktopWrapper) {
         setDesktopDropdownOpen(false);
       }
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+      if (!inDesktopUserMenu && !inMobileAvatar && !inMobileDropdown) {
         setUserMenuOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, []);
 
   // ─── Scroll shadow ────────────────────────────────────────────────────────
@@ -113,12 +134,9 @@ export default function Navbar() {
     }
   }, [mobileSearchOpen]);
 
-  const currentItems =
-    menuStack.length === 0 ? menuItems : menuStack[menuStack.length - 1].dropdown;
+  const currentItems  = menuStack.length === 0 ? menuItems : menuStack[menuStack.length - 1].dropdown;
   const currentParent = menuStack.length > 0 ? menuStack[menuStack.length - 1] : null;
-
-  // ─── User initials for avatar ─────────────────────────────────────────────
-  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "U";
+  const initials      = user?.email?.slice(0, 2).toUpperCase() ?? "U";
 
   return (
     <div className="w-full sticky top-0 z-50">
@@ -147,9 +165,11 @@ export default function Navbar() {
             <SearchIcon />
           </button>
           <CartIcon count={cartCount} onClick={() => navigate("/cart")} />
-          {/* Mobile user icon */}
+
+          {/* Mobile user avatar */}
           {user ? (
             <button
+              ref={mobileAvatarRef}
               onClick={() => setUserMenuOpen((o) => !o)}
               className="w-7 h-7 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center"
             >
@@ -185,28 +205,18 @@ export default function Navbar() {
                 placeholder="Search..."
                 className="outline-none w-full text-sm"
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setDesktopDropdownOpen(true);
-                }}
+                onChange={(e) => { setSearchQuery(e.target.value); setDesktopDropdownOpen(true); }}
                 onFocus={() => setDesktopDropdownOpen(true)}
               />
               {searchQuery && (
                 <button
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setSearchQuery("");
-                    setDesktopDropdownOpen(false);
-                    desktopInputRef.current?.focus();
-                  }}
+                  onClick={() => { setSearchQuery(""); setDesktopDropdownOpen(false); desktopInputRef.current?.focus(); }}
                   className="ml-1 text-gray-400 hover:text-gray-600 text-xl leading-none"
-                >
-                  ×
-                </button>
+                >×</button>
               )}
             </div>
 
-            {/* Desktop suggestion dropdown */}
             {desktopDropdownOpen && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-[999] overflow-hidden">
                 {suggestions.map((product) => (
@@ -216,11 +226,7 @@ export default function Navbar() {
                     onClick={() => handleSuggestionClick(product)}
                     className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 text-left"
                   >
-                    <img
-                      src={product.variants[0]?.images[0]}
-                      alt={product.name}
-                      className="w-8 h-8 object-cover rounded flex-shrink-0 bg-gray-100"
-                    />
+                    <img src={product.variants[0]?.images[0]} alt={product.name} className="w-8 h-8 object-cover rounded flex-shrink-0 bg-gray-100" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{product.name}</p>
                       <p className="text-xs text-gray-400 truncate">{product.categoryLabel}</p>
@@ -233,7 +239,7 @@ export default function Navbar() {
 
           <CartIcon count={cartCount} onClick={() => navigate("/cart")} />
 
-          {/* ── User Menu ── */}
+          {/* Desktop user menu */}
           {user ? (
             <div ref={userMenuRef} className="relative">
               <button
@@ -244,17 +250,15 @@ export default function Navbar() {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[999] overflow-hidden">
-                  {/* User info */}
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <p className="text-xs text-gray-400">Signed in as</p>
                     <p className="text-sm font-semibold text-gray-800 truncate">{user.email}</p>
                   </div>
 
-                  {/* Menu items */}
                   {userRole === "admin" && (
                     <button
-                      onClick={() => { navigate("/admin"); setUserMenuOpen(false); }}
+                      onClick={handleNavigateAdmin}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -266,13 +270,13 @@ export default function Navbar() {
                   )}
 
                   <button
-                    onClick={() => { navigate("/orders"); setUserMenuOpen(false); }}
+                    onClick={handleNavigateOrders}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                       <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
-                      <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
                     My Orders
                   </button>
@@ -294,16 +298,10 @@ export default function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link
-                to="/login"
-                className="text-sm font-semibold text-gray-700 hover:text-black transition-colors"
-              >
+              <Link to="/login" className="text-sm font-semibold text-gray-700 hover:text-black transition-colors">
                 Login
               </Link>
-              <Link
-                to="/signup"
-                className="text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors"
-              >
+              <Link to="/signup" className="text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors">
                 Sign Up
               </Link>
             </div>
@@ -327,10 +325,7 @@ export default function Navbar() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="text-gray-400 hover:text-gray-600 text-lg"
-                  >✕</button>
+                  <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
                 )}
               </div>
               <button
@@ -350,11 +345,7 @@ export default function Navbar() {
                       onClick={() => { handleSuggestionClick(product); setMobileSearchOpen(false); }}
                       className="w-full flex items-center gap-3 px-2 py-3 border-b border-gray-100 text-left hover:bg-gray-50"
                     >
-                      <img
-                        src={product.variants[0]?.images[0]}
-                        alt={product.name}
-                        className="w-10 h-10 object-cover rounded-md bg-gray-100"
-                      />
+                      <img src={product.variants[0]?.images[0]} alt={product.name} className="w-10 h-10 object-cover rounded-md bg-gray-100" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{product.name}</p>
                         <p className="text-xs text-gray-400 truncate">{product.categoryLabel}</p>
@@ -364,8 +355,7 @@ export default function Navbar() {
                 </div>
               ) : searchQuery ? (
                 <div className="bg-white rounded-lg p-4 text-center text-sm text-gray-400">
-                  No results for{" "}
-                  <span className="font-semibold text-gray-600">"{searchQuery}"</span>
+                  No results for <span className="font-semibold text-gray-600">"{searchQuery}"</span>
                 </div>
               ) : null}
             </div>
@@ -373,32 +363,52 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Mobile user dropdown */}
+      {/* ══════════════════════ MOBILE USER DROPDOWN ══════════════════════ */}
+      {/* KEY FIX: ref attached here so outside-click handler knows not to close it */}
       {userMenuOpen && user && (
-        <div className="md:hidden fixed top-16 right-4 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[999] overflow-hidden">
+        <div
+          ref={mobileDropdownRef}
+          className="md:hidden fixed top-24 right-4 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden"
+        >
           <div className="px-4 py-3 border-b border-gray-100">
             <p className="text-xs text-gray-400">Signed in as</p>
             <p className="text-sm font-semibold text-gray-800 truncate">{user.email}</p>
           </div>
+
           {userRole === "admin" && (
             <button
-              onClick={() => { navigate("/admin"); setUserMenuOpen(false); }}
+              onClick={handleNavigateAdmin}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
             >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              </svg>
               Admin Panel
             </button>
           )}
+
           <button
-            onClick={() => { navigate("/orders"); setUserMenuOpen(false); }}
+            onClick={handleNavigateOrders}
             className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
           >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
             My Orders
           </button>
+
           <div className="border-t border-gray-100">
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left"
             >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
               Logout
             </button>
           </div>
@@ -438,7 +448,7 @@ export default function Navbar() {
               ))}
             </div>
 
-            {/* Mobile menu bottom — login/logout */}
+            {/* Bottom login/logout */}
             <div className="border-t border-gray-200 p-4">
               {user ? (
                 <button
@@ -488,8 +498,6 @@ function CartIcon({ count = 0, onClick }) {
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="18" viewBox="0 0 12 16" fill="none">
         <path d="M1.5 15C1.0875 15 0.734375 14.8531 0.440625 14.5594C0.146875 14.2656 0 13.9125 0 13.5V4.5C0 4.0875 0.146875 3.73437 0.440625 3.44062C0.734375 3.14687 1.0875 3 1.5 3H3C3 2.175 3.29375 1.46875 3.88125 0.88125C4.46875 0.29375 5.175 0 6 0C6.825 0 7.53125 0.29375 8.11875 0.88125C8.70625 1.46875 9 2.175 9 3H10.5C10.9125 3 11.2656 3.14687 11.5594 3.44062C11.8531 3.73437 12 4.0875 12 4.5V13.5C12 13.9125 11.8531 14.2656 11.5594 14.5594C11.2656 14.8531 10.9125 15 10.5 15H1.5ZM1.5 13.5H10.5V4.5H9V6C9 6.2125 8.92812 6.39062 8.78437 6.53437C8.64062 6.67812 8.4625 6.75 8.25 6.75C8.0375 6.75 7.85937 6.67812 7.71562 6.53437C7.57187 6.39062 7.5 6.2125 7.5 6V4.5H4.5V6C4.5 6.2125 4.42812 6.39062 4.28437 6.53437C4.14062 6.67812 3.9625 6.75 3.75 6.75C3.5375 6.75 3.35937 6.67812 3.21562 6.53437C3.07187 6.39062 3 6.2125 3 6V4.5H1.5V13.5ZM4.5 3H7.5C7.5 2.5875 7.35312 2.23437 7.05937 1.94062C6.76562 1.64687 6.4125 1.5 6 1.5C5.5875 1.5 5.23437 1.64687 4.94062 1.94062C4.64687 2.23437 4.5 2.5875 4.5 3Z" fill="currentColor" />
       </svg>
-
-      {/* Badge */}
       {count > 0 && (
         <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
           {count > 99 ? "99+" : count}
