@@ -1,16 +1,35 @@
-import { createContext, useContext, useState, useMemo } from "react";
-import { products as allProducts } from "../data/products";
+import { createContext, useContext, useState, useMemo, useEffect } from "react";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { db } from "../firebase/config";
 
 const StoreContext = createContext(null);
 
 export function StoreProvider({ children }) {
+  // ─── Products from Firestore ───────────────────────────────────────────────
+  const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "products"), orderBy("createdAt", "desc")));
+        setProducts(snap.docs.map((d) => ({ _id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error("Products fetch error:", err);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
   const [filter, setFilter] = useState({ category: "all", subCategory: null });
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("default");
 
   // ─── Cart ──────────────────────────────────────────────────────────────────
   const [cartItems, setCartItems] = useState([]);
-  const [cartModal, setCartModal] = useState(null); // { item } | null
+  const [cartModal, setCartModal] = useState(null);
 
   const addToCart = (product) => {
     const itemWithId = { ...product, cartId: Date.now() + Math.random() };
@@ -36,7 +55,7 @@ export function StoreProvider({ children }) {
     [cartItems]
   );
 
-  // ─── Filter / sort (unchanged) ─────────────────────────────────────────────
+  // ─── Filter / sort ─────────────────────────────────────────────────────────
   const selectFilter = (parentValue, childValue = null) => {
     setFilter({ category: parentValue, subCategory: childValue });
     setSearchQuery("");
@@ -45,7 +64,7 @@ export function StoreProvider({ children }) {
   const baseFiltered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
-      return allProducts.filter((p) => {
+      return products.filter((p) => {
         const haystack = [p.name, p.brand, p.type, p.category, p.subCategory]
           .filter(Boolean)
           .join(" ")
@@ -55,17 +74,17 @@ export function StoreProvider({ children }) {
     }
 
     const { category, subCategory } = filter;
-    if (category === "all") return allProducts;
-    if (category === "bestseller") return allProducts.filter((p) => p.bestseller);
-    if (category === "lynx") return allProducts.filter((p) => p.brand === "lynx");
+    if (category === "all") return products;
+    if (category === "bestseller") return products.filter((p) => p.bestseller);
+    if (category === "lynx") return products.filter((p) => p.brand === "lynx");
 
     if (category === "oakley") {
-      const base = allProducts.filter((p) => p.brand === "oakley");
+      const base = products.filter((p) => p.brand === "oakley");
       return subCategory ? base.filter((p) => p.type === subCategory) : base;
     }
 
     if (category === "nb-footwear") {
-      const base = allProducts.filter(
+      const base = products.filter(
         (p) => p.brand === "new balance" && p.type === "footwear"
       );
       if (!subCategory) return base;
@@ -74,7 +93,7 @@ export function StoreProvider({ children }) {
     }
 
     if (category === "nb-apparel") {
-      const base = allProducts.filter(
+      const base = products.filter(
         (p) => p.brand === "new balance" && p.type === "apparel"
       );
       if (!subCategory) return base;
@@ -87,14 +106,14 @@ export function StoreProvider({ children }) {
       return base;
     }
 
-    if (category === "gear") return allProducts.filter((p) => p.brand === "g-form");
+    if (category === "gear") return products.filter((p) => p.brand === "g-form");
     if (category === "skin accessories")
-      return allProducts.filter((p) => p.brand === "lizard skins");
+      return products.filter((p) => p.brand === "lizard skins");
 
-    return allProducts.filter(
+    return products.filter(
       (p) => p.brand === category || p.type === category
     );
-  }, [filter, searchQuery]);
+  }, [filter, searchQuery, products]);
 
   const filteredProducts = useMemo(() => {
     const arr = [...baseFiltered];
@@ -138,7 +157,8 @@ export function StoreProvider({ children }) {
   return (
     <StoreContext.Provider
       value={{
-        products: allProducts,
+        products,
+        productsLoading,
         filter,
         searchQuery,
         filteredProducts,

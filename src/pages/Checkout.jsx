@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../context/StoreContext";
+import { useAuth } from "../context/AuthContext";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase/config";
 import Navbar from "../component/Navbar";
 import Footer from "../component/Footer";
 import emailjs from "@emailjs/browser";
 
-// ── Replace these with your actual EmailJS credentials ──────────────────────
-const EMAILJS_SERVICE_ID  = "service_y6rn8fi";
-const EMAILJS_TEMPLATE_ID = "template_ctogvkl";
-const EMAILJS_PUBLIC_KEY  = "D3dhA8Nhk0kq31t3J";
-const EMAILJS_CLIENT_TEMPLATE_ID = "template_zjn0zte"; // naya client template ID
-
+// ── EmailJS credentials ──────────────────────────────────────────────────────
+const EMAILJS_SERVICE_ID         = "service_y6rn8fi";
+const EMAILJS_TEMPLATE_ID        = "template_ctogvkl";
+const EMAILJS_PUBLIC_KEY         = "D3dhA8Nhk0kq31t3J";
+const EMAILJS_CLIENT_TEMPLATE_ID = "template_zjn0zte";
 // ────────────────────────────────────────────────────────────────────────────
 
 const HANDLING_RATE = 0.03;
@@ -37,6 +39,7 @@ function InputField({ label, id, required, error, children, hint }) {
 
 export default function Checkout() {
   const { cartItems, cartTotal, setCartItems } = useStore();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const handling = cartTotal > 0 ? parseFloat((cartTotal * HANDLING_RATE).toFixed(2)) : 0;
@@ -47,7 +50,7 @@ export default function Checkout() {
     address: "", city: "", state: "", zip: "",
     notes: "",
   });
-  const [errors, setErrors]     = useState({});
+  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   // Redirect if cart is empty
@@ -86,10 +89,7 @@ export default function Checkout() {
 
   const buildItemsTable = () =>
     cartItems
-      .map(
-        (i) =>
-          `• ${i.name} | Qty: ${i.qty} | Size: ${i.size || "N/A"} | Color: ${i.color || "N/A"} | $${(i.price * i.qty).toFixed(2)}`
-      )
+      .map((i) => `• ${i.name} | Qty: ${i.qty} | Size: ${i.size || "N/A"} | Color: ${i.color || "N/A"} | $${(i.price * i.qty).toFixed(2)}`)
       .join("\n");
 
   const handleSubmit = async () => {
@@ -99,13 +99,14 @@ export default function Checkout() {
     setSubmitting(true);
 
     const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
+    const shippingAddress = `${form.address}, ${form.city}, ${form.state} ${form.zip}`;
 
     const templateParams = {
       order_number:     orderNumber,
       customer_name:    `${form.firstName} ${form.lastName}`,
       customer_email:   form.email,
       customer_phone:   form.phone,
-      shipping_address: `${form.address}, ${form.city}, ${form.state} ${form.zip}`,
+      shipping_address: shippingAddress,
       order_items:      buildItemsTable(),
       subtotal:         `$${cartTotal.toFixed(2)}`,
       handling:         `$${handling.toFixed(2)}`,
@@ -114,6 +115,7 @@ export default function Checkout() {
     };
 
     try {
+      // ── 1. Admin email ──
       await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
@@ -121,17 +123,40 @@ export default function Checkout() {
         EMAILJS_PUBLIC_KEY
       );
 
-       // Client confirmation email
-  await emailjs.send(
-    EMAILJS_SERVICE_ID,
-    EMAILJS_CLIENT_TEMPLATE_ID,
-    { ...templateParams, to_email: form.email },
-    EMAILJS_PUBLIC_KEY
-  );
+      // ── 2. Client confirmation email ──
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_CLIENT_TEMPLATE_ID,
+        { ...templateParams, to_email: form.email },
+        EMAILJS_PUBLIC_KEY
+      );
 
+      // ── 3. Firestore mein order save karo ──
+      await addDoc(collection(db, "orders"), {
+        orderNumber,
+        userId:          user.uid,
+        customerName:    `${form.firstName} ${form.lastName}`,
+        email:           form.email,
+        phone:           form.phone,
+        shippingAddress,
+        items: cartItems.map((i) => ({
+          productId: i._id ?? null,
+          name:      i.name,
+          image:     i.image ?? null,
+          price:     i.price,
+          qty:       i.qty,
+          size:      i.size  || null,
+          color:     i.color || null,
+        })),
+        subtotal:       cartTotal,
+        handling,
+        estimatedTotal,
+        notes:          form.notes || "",
+        status:         "pending",
+        createdAt:      serverTimestamp(),
+      });
 
-
-      // Clear cart and navigate to thank you
+      // ── 4. Cart clear karo aur Thank You page pe jao ──
       setCartItems([]);
       navigate("/thank-you", {
         state: {
@@ -142,8 +167,9 @@ export default function Checkout() {
           cartItems,
         },
       });
+
     } catch (err) {
-      console.error("EmailJS error:", err);
+      console.error("Order error:", err);
       alert("Something went wrong sending your order. Please try again or contact support.");
     } finally {
       setSubmitting(false);
@@ -244,7 +270,7 @@ export default function Checkout() {
                     <img src={item.image} alt={item.name} className="w-12 h-12 object-contain bg-gray-50 border border-gray-200 rounded-lg p-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-900 leading-tight uppercase">{item.name}</p>
-                      {item.size && <p className="text-xs text-gray-500">Size: {item.size}</p>}
+                      {item.size  && <p className="text-xs text-gray-500">Size: {item.size}</p>}
                       {item.color && <p className="text-xs text-gray-500">Color: {item.color}</p>}
                       <p className="text-xs text-gray-500">Qty: {item.qty}</p>
                     </div>

@@ -1,12 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../context/StoreContext";
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../component/Navbar";
 import Footer from "../component/Footer";
 
-const HANDLING_RATE = 0.03; // 3% handling fee example
+const HANDLING_RATE = 0.03;
 
 export default function Cart() {
   const { cartItems, cartTotal, removeFromCart, updateCartQty } = useStore();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const handling = cartTotal > 0 ? parseFloat((cartTotal * HANDLING_RATE).toFixed(2)) : 0;
@@ -20,7 +22,6 @@ export default function Cart() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-8">Your Cart</h1>
 
         {cartItems.length === 0 ? (
-          /* ── Empty state ── */
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round"
@@ -79,16 +80,39 @@ export default function Cart() {
                     <span className="text-gray-600">Estimated Sales Tax</span>
                     <span className="text-gray-400">--</span>
                   </div>
-
                   <div className="border-t border-gray-200 pt-3 flex justify-between font-bold text-base">
                     <span>Estimated Total</span>
                     <span>${estimatedTotal.toFixed(2)}</span>
                   </div>
                 </div>
 
-                <button onClick={() => navigate("/checkout")} className="mt-6 w-full bg-gray-900 hover:bg-black text-white font-semibold py-3 rounded-lg text-sm transition-colors">
-                  Proceed to Checkout
-                </button>
+                {/* ── Auth-aware checkout button ── */}
+                {user ? (
+                  <button
+                    onClick={() => navigate("/checkout")}
+                    className="mt-6 w-full bg-gray-900 hover:bg-black text-white font-semibold py-3 rounded-lg text-sm transition-colors"
+                  >
+                    Proceed to Checkout
+                  </button>
+                ) : (
+                  <div className="mt-6 space-y-2">
+                    <button
+                      onClick={() => navigate("/login")}
+                      className="w-full bg-gray-900 hover:bg-black text-white font-semibold py-3 rounded-lg text-sm transition-colors"
+                    >
+                      Login to Checkout
+                    </button>
+                    <p className="text-center text-xs text-gray-400">
+                      Don't have an account?{" "}
+                      <button
+                        onClick={() => navigate("/signup")}
+                        className="text-gray-700 font-semibold hover:underline"
+                      >
+                        Sign Up
+                      </button>
+                    </p>
+                  </div>
+                )}
 
                 <button
                   onClick={() => navigate("/")}
@@ -138,32 +162,19 @@ function CartItem({ item, onRemove, onQtyChange }) {
 
   return (
     <div className="flex gap-4 py-5">
-      {/* Image */}
       <div className="w-24 h-24 flex-shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 p-1">
-        <img
-          src={item.image}
-          alt={item.name}
-          className="w-full h-full object-contain"
-        />
+        <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
       </div>
 
-      {/* Details */}
       <div className="flex-1 min-w-0">
-        <p className="font-bold text-gray-900 uppercase text-sm tracking-wide leading-tight">
-          {item.name}
-        </p>
-        {item.brand && (
-          <p className="text-sm text-gray-500 mt-0.5">{capitalize(item.brand)}</p>
-        )}
+        <p className="font-bold text-gray-900 uppercase text-sm tracking-wide leading-tight">{item.name}</p>
+        {item.brand && <p className="text-sm text-gray-500 mt-0.5">{capitalize(item.brand)}</p>}
         <div className="mt-1.5 space-y-0.5 text-sm text-gray-600">
           {item.size && <p>Size: {item.size}</p>}
           {item.color && (
             <p className="flex items-center gap-1.5">
               Color:
-              <span
-                className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300"
-                style={{ backgroundColor: item.color.toLowerCase() }}
-              />
+              <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: item.color.toLowerCase() }} />
               {capitalize(item.color)}
             </p>
           )}
@@ -171,11 +182,9 @@ function CartItem({ item, onRemove, onQtyChange }) {
         </div>
       </div>
 
-      {/* Price + qty + delete */}
       <div className="flex flex-col items-end justify-between flex-shrink-0">
         <p className="font-bold text-gray-900">${(item.price * item.qty).toFixed(2)}</p>
 
-        {/* Qty stepper */}
         <div className="flex items-center gap-2 mt-2">
           <button
             onClick={() => onQtyChange(item.qty - 1)}
@@ -198,7 +207,6 @@ function CartItem({ item, onRemove, onQtyChange }) {
           </button>
         </div>
 
-        {/* Delete */}
         <button
           onClick={onRemove}
           className="mt-2 text-red-400 hover:text-red-600 transition-colors"

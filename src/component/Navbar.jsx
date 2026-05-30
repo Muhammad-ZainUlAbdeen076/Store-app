@@ -2,13 +2,15 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { menuItems } from "../data/menuItems";
 import logo from "../assets/logo.png";
 import { useStore } from "../context/StoreContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 // Max suggestions shown in the dropdown
 const MAX_SUGGESTIONS = 6;
 
 export default function Navbar() {
   const { selectFilter, searchQuery, setSearchQuery, products, cartItems } = useStore();
+  const { user, userRole, logout } = useAuth();
   const navigate = useNavigate();
 
   const [active, setActive] = useState(null);
@@ -16,10 +18,12 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [desktopDropdownOpen, setDesktopDropdownOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const desktopInputRef = useRef(null);
   const mobileInputRef = useRef(null);
   const desktopWrapperRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   // ─── Suggestions ──────────────────────────────────────────────────────────
   const suggestions = useMemo(() => {
@@ -75,11 +79,20 @@ export default function Navbar() {
     setMobileSearchOpen(false);
   };
 
-  // ─── Outside click closes desktop dropdown ────────────────────────────────
+  const handleLogout = async () => {
+    await logout();
+    setUserMenuOpen(false);
+    navigate("/");
+  };
+
+  // ─── Outside click closes dropdowns ───────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if (desktopWrapperRef.current && !desktopWrapperRef.current.contains(e.target)) {
         setDesktopDropdownOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -104,6 +117,9 @@ export default function Navbar() {
     menuStack.length === 0 ? menuItems : menuStack[menuStack.length - 1].dropdown;
   const currentParent = menuStack.length > 0 ? menuStack[menuStack.length - 1] : null;
 
+  // ─── User initials for avatar ─────────────────────────────────────────────
+  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "U";
+
   return (
     <div className="w-full sticky top-0 z-50">
 
@@ -126,11 +142,24 @@ export default function Navbar() {
 
         <img src={logo} alt="logo" className="w-10" />
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button onClick={() => setMobileSearchOpen(true)}>
             <SearchIcon />
           </button>
           <CartIcon count={cartCount} onClick={() => navigate("/cart")} />
+          {/* Mobile user icon */}
+          {user ? (
+            <button
+              onClick={() => setUserMenuOpen((o) => !o)}
+              className="w-7 h-7 rounded-full bg-gray-900 text-white text-xs font-bold flex items-center justify-center"
+            >
+              {initials}
+            </button>
+          ) : (
+            <Link to="/login" className="text-xs font-semibold text-gray-700">
+              Login
+            </Link>
+          )}
         </div>
       </div>
 
@@ -203,6 +232,82 @@ export default function Navbar() {
           </div>
 
           <CartIcon count={cartCount} onClick={() => navigate("/cart")} />
+
+          {/* ── User Menu ── */}
+          {user ? (
+            <div ref={userMenuRef} className="relative">
+              <button
+                onClick={() => setUserMenuOpen((o) => !o)}
+                className="w-9 h-9 rounded-full bg-gray-900 text-white text-sm font-bold flex items-center justify-center hover:bg-black transition-colors"
+              >
+                {initials}
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[999] overflow-hidden">
+                  {/* User info */}
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="text-xs text-gray-400">Signed in as</p>
+                    <p className="text-sm font-semibold text-gray-800 truncate">{user.email}</p>
+                  </div>
+
+                  {/* Menu items */}
+                  {userRole === "admin" && (
+                    <button
+                      onClick={() => { navigate("/admin"); setUserMenuOpen(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                      </svg>
+                      Admin Panel
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => { navigate("/orders"); setUserMenuOpen(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    My Orders
+                  </button>
+
+                  <div className="border-t border-gray-100">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link
+                to="/login"
+                className="text-sm font-semibold text-gray-700 hover:text-black transition-colors"
+              >
+                Login
+              </Link>
+              <Link
+                to="/signup"
+                className="text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors"
+              >
+                Sign Up
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -268,6 +373,38 @@ export default function Navbar() {
         </div>
       )}
 
+      {/* Mobile user dropdown */}
+      {userMenuOpen && user && (
+        <div className="md:hidden fixed top-16 right-4 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-[999] overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <p className="text-xs text-gray-400">Signed in as</p>
+            <p className="text-sm font-semibold text-gray-800 truncate">{user.email}</p>
+          </div>
+          {userRole === "admin" && (
+            <button
+              onClick={() => { navigate("/admin"); setUserMenuOpen(false); }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Admin Panel
+            </button>
+          )}
+          <button
+            onClick={() => { navigate("/orders"); setUserMenuOpen(false); }}
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            My Orders
+          </button>
+          <div className="border-t border-gray-100">
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ══════════════════════ MOBILE MENU DRAWER ══════════════════════ */}
       {active === "menu" && (
         <>
@@ -299,6 +436,35 @@ export default function Navbar() {
                   {item.hasDropdown && <span className="text-gray-400">›</span>}
                 </div>
               ))}
+            </div>
+
+            {/* Mobile menu bottom — login/logout */}
+            <div className="border-t border-gray-200 p-4">
+              {user ? (
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-2.5 text-sm font-semibold text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  Logout
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <Link
+                    to="/login"
+                    onClick={closeMenu}
+                    className="flex-1 py-2.5 text-sm font-semibold text-center border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={closeMenu}
+                    className="flex-1 py-2.5 text-sm font-semibold text-center bg-gray-900 text-white rounded-lg hover:bg-black transition-colors"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </>
